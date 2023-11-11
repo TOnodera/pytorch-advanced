@@ -7,10 +7,9 @@ import torch.optim as optim
 import torch.utils.data as data
 from torchvision import models
 from utils import make_datapath_list
-from hymenoptera_dataset import HymenopteraDataset
+from utils import HymenopteraDataset, ImageTransform
 import utils
-from image_transform import ImageTransform
-from train_model import train_model
+from transfer_train_model import train_model
 
 # シード設定
 torch.manual_seed(1234)
