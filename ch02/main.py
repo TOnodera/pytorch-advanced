@@ -6,7 +6,9 @@ from data_transform import DataTransform
 import numpy as np
 from voc_dataset import VOCDataset
 from torch.utils.data.dataloader import DataLoader
-
+from dbox import DBox
+import pandas as pd
+from ssd import SSD
 
 
 rootpath = "./data/VOCdevkit/VOC2012/"
@@ -50,9 +52,16 @@ dataloaders_dict = {
     "val": val_dataloader
 }
 
-batch_iterator = iter(dataloaders_dict["val"])
-images, targets = next(batch_iterator)
+ssd_cfg = {
+    'num_classes': 21,  # 背景クラスを含めた合計クラス数
+    'input_size': 300,  # 画像の入力サイズ
+    'bbox_aspect_num': [4, 6, 6, 6, 4, 4],  # 出力するDBoxのアスペクト比の種類
+    'feature_maps': [38, 19, 10, 5, 3, 1],  # 各sourceの画像サイズ
+    'steps': [8, 16, 32, 64, 100, 300],  # DBOXの大きさを決める
+    'min_sizes': [30, 60, 111, 162, 213, 264],  # DBOXの大きさを決める
+    'max_sizes': [60, 111, 162, 213, 264, 315],  # DBOXの大きさを決める
+    'aspect_ratios': [[2], [2, 3], [2, 3], [2, 3], [2], [2]],
+}
 
-print(train_dataset.__len__())
-print(val_dataset.__len__())
-
+ssd_test = SSD(phase='train', cfg=ssd_cfg)
+print(ssd_test)
