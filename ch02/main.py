@@ -3,12 +3,13 @@ from anno_xml2list import Anno_xml2list
 import cv2
 import matplotlib.pyplot as plt
 from data_transform import DataTransform
-import numpy as np
 from voc_dataset import VOCDataset
-from torch.utils.data.dataloader import DataLoader
-from dbox import DBox
-import pandas as pd
+from torch.utils.data import DataLoader
 from ssd import SSD
+import torch
+from torch import nn, optim
+from multi_box_loss import MultiBoxLoss
+from train_model import train_model
 
 
 rootpath = "./data/VOCdevkit/VOC2012/"
@@ -30,21 +31,17 @@ height, width, channels = img.shape  # 画像のサイズを取得
 
 # アノテーションをリストで表示
 anno_list = transform_anno(train_anno_list[0], width, height)
-plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-# plt.show()
 
 color_mean = (104, 117, 123)
 input_size = 300
 transform = DataTransform(input_size, color_mean)
 phase = 'train'
 img_transformed, boxes, labels = transform(img, phase, anno_list[:, :4], anno_list[:, 4])
-plt.imshow(cv2.cvtColor(img_transformed, cv2.COLOR_BGR2RGB))
-# plt.show()
 
 train_dataset = VOCDataset(train_img_list, train_anno_list, phase='train', transform=DataTransform(input_size, color_mean), transform_anno=Anno_xml2list(voc_classes))
 val_dataset = VOCDataset(val_img_list, val_anno_list, phase='val', transform=DataTransform(input_size, color_mean), transform_anno=Anno_xml2list(voc_classes))
 
-batch_size = 4
+batch_size = 32 
 train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=utils.od_collate_fn)
 val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, collate_fn=utils.od_collate_fn)
 dataloaders_dict = {
@@ -63,5 +60,25 @@ ssd_cfg = {
     'aspect_ratios': [[2], [2, 3], [2, 3], [2, 3], [2], [2]],
 }
 
-ssd_test = SSD(phase='train', cfg=ssd_cfg)
-print(ssd_test)
+net = SSD(phase='train', cfg=ssd_cfg)
+
+vgg_weights = torch.load('./weights/vgg16_reducedfc.pth')
+net.vgg.load_state_dict(vgg_weights)
+
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.constant_(m.bias, 0.0)
+        
+net.extras.apply(weights_init)
+net.loc.apply(weights_init)
+net.conf.apply(weights_init)
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(f"使用デバイス: {device}")
+print("ネットワーク設定完了: 学習済みの重みをロードしました。")
+
+
+criterion = MultiBoxLoss(jaccard_thresh=0.5, neg_pos=3, device=device)
+optimizer = optim.SGD(net.parameters(), lr=1e-3, momentum=0.9, weight_decay=5e-4)
+num_epochs = 50
+train_model(net, dataloaders_dict, criterion, optimizer, num_epochs=num_epochs)
