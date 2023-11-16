@@ -19,8 +19,3 @@ train_dataloader = data.DataLoader(val_dataset, batch_size=batch_size, shuffle=T
 val_dataloader = data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 dataloader_dict = {'train': train_dataloader, 'val': val_dataloader}
-
-batch_iterator = iter(dataloader_dict['val'])
-images, anno_class_images = next(batch_iterator)
-print(images.size())
-print(anno_class_images.size())
