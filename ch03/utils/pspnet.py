@@ -1,4 +1,4 @@
-from torch import nn
+import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
@@ -46,7 +46,7 @@ class conv2DBatchNormRelu(nn.Module):
         super(conv2DBatchNormRelu, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, bias=bias)
         self.batchnorm = nn.BatchNorm2d(out_channels)
-        self.relu = nn.Relu(inplace=True)
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         x = self.conv(x)
@@ -114,7 +114,7 @@ class ResidualBlockPSP(nn.Sequential):
                 )
             )
             
-class conv2DBatchNorm:
+class conv2DBatchNorm(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, dilation, bias) -> None:
         super(conv2DBatchNorm, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, bias=bias)
@@ -127,17 +127,18 @@ class conv2DBatchNorm:
 
 class bottleNeckPSP(nn.Module):
     def __init__(self, in_channels, mid_channels, out_channels, stride, dilation):
-        super(conv2DBatchNorm, self).__init__()
+        super(bottleNeckPSP, self).__init__()
 
         self.cbr_1 = conv2DBatchNormRelu(in_channels, mid_channels, kernel_size=1, stride=1, padding=0,dilation=1, bias=False)
-        self.cbr_2 = conv2DBatchNormRelu(in_channels, mid_channels, kernel_size=3, stride=stride, padding=dilation,dilation=dilation, bias=False)
-        self.cbr_3 = conv2DBatchNormRelu(in_channels, mid_channels, kernel_size=1, stride=1, padding=0,dilation=1, bias=False)
+        self.cbr_2 = conv2DBatchNormRelu(mid_channels, mid_channels, kernel_size=3, stride=stride, padding=dilation,dilation=dilation, bias=False)
+        self.cbr_3 = conv2DBatchNorm(mid_channels, out_channels, kernel_size=1, stride=1, padding=0,dilation=1, bias=False)
         
         # スキップ結合
         self.cb_residual = conv2DBatchNorm(in_channels, out_channels, kernel_size=1, stride=stride, padding=0, dilation=1, bias=False)
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
-        conv = self.cbr_3(self.cbr_2(self.cb1(x)))
+        conv = self.cbr_3(self.cbr_2(self.cbr_1(x)))
         residual = self.cb_residual(x)
         return self.relu(conv + residual)
 
@@ -147,7 +148,7 @@ class bottleNeckIdentifyPSP(nn.Module):
         
         self.cbr_1 = conv2DBatchNormRelu(in_channels, mid_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
         self.cbr_2 = conv2DBatchNormRelu(mid_channels, mid_channels, kernel_size=3, stride=1, padding=dilation, dilation=dilation, bias=False)
-        self.cbr_3 = conv2DBatchNormRelu(mid_channels, in_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
+        self.cbr_3 = conv2DBatchNorm(mid_channels, in_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
         self.relu = nn.ReLU(inplace=True)
         
     def forward(self, x):
@@ -201,5 +202,48 @@ class PyramidPooling(nn.Module):
         
         # 最終的に結合させる
         output = torch.cat([x, out1, out2, out3, out4], dim=1)
+        
+        return output
+
+class DecodePSPFeature(nn.Module):
+    def __init__(self, height, width, n_classes):
+        super(DecodePSPFeature, self).__init__()
+
+        self.height = height
+        self.widht = width
+
+        self.cbr = conv2DBatchNormRelu(
+            in_channels=4096, out_channels=512, kernel_size=3, stride=1, padding=1, dilation=1, bias=False
+        )
+        self.dropout = nn.Dropout2d(p=0.1)
+        self.classification = nn.Conv2d(in_channels=512, out_channels=n_classes, kernel_size=1, stride=1, padding=0)
+        
+    def forward(self, x):
+        x = self.cbr(x)
+        x = self.dropout(x)
+        x = self.classification(x)
+        output = F.interpolate(x, size=(self.height, self.widht), mode="bilinear", align_corners=True)
+        
+        return output
+
+class AuxiliaryPSPLayers(nn.Module):
+    def __init__(self, in_channels, height, width, n_classes):
+        super(AuxiliaryPSPLayers, self).__init__()
+        self.height = height
+        self.width = width
+
+        self.cbr = conv2DBatchNormRelu(
+            in_channels=in_channels, out_channels=256, kernel_size=3, stride=1, padding=1, dilation=1, bias=True
+        )
+        self.dropout = nn.Dropout2d(p=0.1)
+        self.classification = nn.Conv2d(
+            in_channels=256, out_channels=n_classes, kernel_size=1, stride=1, padding=0
+        )
+    
+    def forward(self, x):
+        x = self.cbr(x)
+        x = self.dropout(x)
+        x = self.classification(x)
+        output = F.interpolate(x, size=(self.height, self.width), mode="bilinear", align_corners=True)
         
         return output
