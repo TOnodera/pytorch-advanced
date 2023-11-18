@@ -1,6 +1,9 @@
 from utils.dataloader import make_datapath_list, VOCDataset, DataTransform
 from torch.utils import data
 from utils.pspnet import *
+from torch import optim
+import math
+from utils import train
 
 rootpath = "./data/VOCdevkit/VOC2012/"
 train_img_list, train_anno_list, val_img_list, val_anno_list = make_datapath_list(rootpath)
@@ -19,7 +22,7 @@ batch_size = 8
 train_dataloader = data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 val_dataloader = data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-dataloader_dict = {'train': train_dataloader, 'val': val_dataloader}
+dataloaders_dict = {'train': train_dataloader, 'val': val_dataloader}
 
 net = PSPNet(n_classes=150)
 
@@ -43,3 +46,23 @@ net.aux.classification.apply(weights_init)
 
 print("ネットワーク設定完了：学習済みパラメータをロードしました。")
 
+# 学習率設定
+optimizer = optim.SGD([
+    {'params': net.feature_conv.parameters(), 'lr': 1e-3},
+    {'params': net.feature_res_1.parameters(), 'lr': 1e-3},
+    {'params': net.feature_res_2.parameters(), 'lr': 1e-3},
+    {'params': net.feature_dilated_res_1.parameters(), 'lr': 1e-3},
+    {'params': net.feature_dilated_res_2.parameters(), 'lr': 1e-3},
+    {'params': net.pyramid_pooling.parameters(), 'lr': 1e-3},
+    {'params': net.decode_feature.parameters(), 'lr': 1e-2},
+    {'params': net.aux.parameters(), 'lr': 1e-2},
+], momentum=0.9, weight_decay=0.0001)
+
+def lambda_epoch(epoch):
+    max_epoch = 30
+    return math.pow((1-epoch/max_epoch), 0.9)
+
+criterion = PSPLoss(aux_weight=0.4)
+scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_epoch)
+num_epochs = 30
+train.train_model(net, dataloaders_dict, criterion, scheduler, optimizer, num_epochs)

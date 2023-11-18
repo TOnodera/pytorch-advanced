@@ -161,7 +161,7 @@ class PyramidPooling(nn.Module):
     def __init__(self, in_channels, pool_size, height, width):
         super(PyramidPooling, self).__init__()
         self.height = height
-        self.widht = width
+        self.width = width
         
         out_channels = int(in_channels/len(pool_size))
         
@@ -189,16 +189,16 @@ class PyramidPooling(nn.Module):
 
     def forward(self, x):
         out1 = self.cbr_1(self.avpool_1(x))
-        out1 = F.interpolate(out1, size=(self.height, self.widht), mode="bilinear",align_corners=True)
+        out1 = F.interpolate(out1, size=(self.height, self.width), mode="bilinear",align_corners=True)
         
         out2 = self.cbr_2(self.avpool_2(x))
-        out2 = F.interpolate(out2, size=(self.height, self.widht), mode="bilinear",align_corners=True)
+        out2 = F.interpolate(out2, size=(self.height, self.width), mode="bilinear",align_corners=True)
         
         out3 = self.cbr_3(self.avpool_3(x))
-        out3 = F.interpolate(out3, size=(self.height, self.widht), mode="bilinear",align_corners=True)
+        out3 = F.interpolate(out3, size=(self.height, self.width), mode="bilinear",align_corners=True)
 
         out4 = self.cbr_4(self.avpool_4(x))
-        out4 = F.interpolate(out4, size=(self.height, self.widht), mode="bilinear",align_corners=True)
+        out4 = F.interpolate(out4, size=(self.height, self.width), mode="bilinear",align_corners=True)
         
         # 最終的に結合させる
         output = torch.cat([x, out1, out2, out3, out4], dim=1)
@@ -210,7 +210,7 @@ class DecodePSPFeature(nn.Module):
         super(DecodePSPFeature, self).__init__()
 
         self.height = height
-        self.widht = width
+        self.width = width
 
         self.cbr = conv2DBatchNormRelu(
             in_channels=4096, out_channels=512, kernel_size=3, stride=1, padding=1, dilation=1, bias=False
@@ -222,7 +222,7 @@ class DecodePSPFeature(nn.Module):
         x = self.cbr(x)
         x = self.dropout(x)
         x = self.classification(x)
-        output = F.interpolate(x, size=(self.height, self.widht), mode="bilinear", align_corners=True)
+        output = F.interpolate(x, size=(self.height, self.width), mode="bilinear", align_corners=True)
         
         return output
 
@@ -247,3 +247,13 @@ class AuxiliaryPSPLayers(nn.Module):
         output = F.interpolate(x, size=(self.height, self.width), mode="bilinear", align_corners=True)
         
         return output
+
+class PSPLoss(nn.Module):
+    def __init__(self, aux_weight=0.4):
+        super(PSPLoss, self).__init__()
+        self.aux_weight = aux_weight
+        
+    def forward(self, outputs, targets):
+        loss = F.cross_entropy(outputs[0], targets, reduction='mean')
+        loss_aux = F.cross_entropy(outputs[1], targets, reduction='mean')
+        return loss + self.aux_weight*loss_aux
