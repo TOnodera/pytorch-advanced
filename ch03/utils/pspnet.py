@@ -131,14 +131,14 @@ class bottleNeckPSP(nn.Module):
 
         self.cbr_1 = conv2DBatchNormRelu(in_channels, mid_channels, kernel_size=1, stride=1, padding=0,dilation=1, bias=False)
         self.cbr_2 = conv2DBatchNormRelu(mid_channels, mid_channels, kernel_size=3, stride=stride, padding=dilation,dilation=dilation, bias=False)
-        self.cbr_3 = conv2DBatchNorm(mid_channels, out_channels, kernel_size=1, stride=1, padding=0,dilation=1, bias=False)
+        self.cb_3 = conv2DBatchNorm(mid_channels, out_channels, kernel_size=1, stride=1, padding=0,dilation=1, bias=False)
         
         # スキップ結合
         self.cb_residual = conv2DBatchNorm(in_channels, out_channels, kernel_size=1, stride=stride, padding=0, dilation=1, bias=False)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
-        conv = self.cbr_3(self.cbr_2(self.cbr_1(x)))
+        conv = self.cb_3(self.cbr_2(self.cbr_1(x)))
         residual = self.cb_residual(x)
         return self.relu(conv + residual)
 
@@ -148,11 +148,11 @@ class bottleNeckIdentifyPSP(nn.Module):
         
         self.cbr_1 = conv2DBatchNormRelu(in_channels, mid_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
         self.cbr_2 = conv2DBatchNormRelu(mid_channels, mid_channels, kernel_size=3, stride=1, padding=dilation, dilation=dilation, bias=False)
-        self.cbr_3 = conv2DBatchNorm(mid_channels, in_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
+        self.cb_3 = conv2DBatchNorm(mid_channels, in_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
         self.relu = nn.ReLU(inplace=True)
         
     def forward(self, x):
-        conv = self.cbr_3(self.cbr_2(self.cbr_1(x)))
+        conv = self.cb_3(self.cbr_2(self.cbr_1(x)))
         residual = x
         return self.relu(conv + residual)
         
@@ -233,7 +233,7 @@ class AuxiliaryPSPLayers(nn.Module):
         self.width = width
 
         self.cbr = conv2DBatchNormRelu(
-            in_channels=in_channels, out_channels=256, kernel_size=3, stride=1, padding=1, dilation=1, bias=True
+            in_channels=in_channels, out_channels=256, kernel_size=3, stride=1, padding=1, dilation=1, bias=False
         )
         self.dropout = nn.Dropout2d(p=0.1)
         self.classification = nn.Conv2d(
